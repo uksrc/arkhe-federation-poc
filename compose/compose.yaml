@@ -1,0 +1,112 @@
+
+name: arkhe-federation-poc
+
+services:
+
+  # ==========================================
+  # SOL INSTALLATION
+  # ==========================================
+
+  sol-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: arkhe
+      POSTGRES_PASSWORD: ${SOL_DB_PASSWORD:?Set SOL_DB_PASSWORD}
+      POSTGRES_DB: arkhe
+    volumes:
+      - sol_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U arkhe -d arkhe"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  sol-minter:
+    image: arkhe:federation-poc
+    build:
+      context: https://github.com/RCOSDP/arkhe.git#${ARKHE_REF:?Set ARKHE_REF}
+    depends_on:
+      sol-db:
+        condition: service_healthy
+    environment:
+      ARKHE_DATABASE_URL: postgresql+psycopg://arkhe:${SOL_DB_PASSWORD}@sol-db/arkhe
+      ARKHE_AUTH: apikey
+      ARKHE_ADMIN_LOGIN: bearer
+      ARKHE_LANG: en
+    command:
+      - sh
+      - -c
+      - "alembic upgrade head && exec uvicorn arkhe.app:create_app --factory --host 0.0.0.0 --port 8000"
+    ports:
+      - "127.0.0.1:8257:8000"
+
+  sol-resolver:
+    image: arkhe:federation-poc
+    depends_on:
+      sol-minter:
+        condition: service_started
+    environment:
+      ARKHE_DATABASE_URL: postgresql+psycopg://arkhe:${SOL_DB_PASSWORD}@sol-db/arkhe
+      ARKHE_RESOLVER: "1"
+      ARKHE_LANG: en
+    command:
+      - sh
+      - -c
+      - "exec uvicorn arkhe.app:create_app --factory --host 0.0.0.0 --port 8000"
+    ports:
+      - "127.0.0.1:8258:8000"
+
+  # ==========================================
+  # TERRA INSTALLATION
+  # ==========================================
+
+  terra-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: arkhe
+      POSTGRES_PASSWORD: ${TERRA_DB_PASSWORD:?Set TERRA_DB_PASSWORD}
+      POSTGRES_DB: arkhe
+    volumes:
+      - terra_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U arkhe -d arkhe"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  terra-minter:
+    image: arkhe:federation-poc
+    depends_on:
+      terra-db:
+        condition: service_healthy
+    environment:
+      ARKHE_DATABASE_URL: postgresql+psycopg://arkhe:${TERRA_DB_PASSWORD}@terra-db/arkhe
+      ARKHE_AUTH: apikey
+      ARKHE_ADMIN_LOGIN: bearer
+      ARKHE_LANG: en
+    command:
+      - sh
+      - -c
+      - "alembic upgrade head && exec uvicorn arkhe.app:create_app --factory --host 0.0.0.0 --port 8000"
+    ports:
+      - "127.0.0.1:8357:8000"
+
+  terra-resolver:
+    image: arkhe:federation-poc
+    depends_on:
+      terra-minter:
+        condition: service_started
+    environment:
+      ARKHE_DATABASE_URL: postgresql+psycopg://arkhe:${TERRA_DB_PASSWORD}@terra-db/arkhe
+      ARKHE_RESOLVER: "1"
+      ARKHE_LANG: en
+    command:
+      - sh
+      - -c
+      - "exec uvicorn arkhe.app:create_app --factory --host 0.0.0.0 --port 8000"
+    ports:
+      - "127.0.0.1:8358:8000"
+
+volumes:
+  sol_pgdata:
+  terra_pgdata:
