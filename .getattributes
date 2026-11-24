@@ -1,0 +1,9 @@
+# Shell scripts must use Unix line endings
+*.sh text eol=lf
+
+# Docker Compose and configuration
+*.yaml text eol=lf
+*.yml text eol=lf
+
+# Environment templates
+*.example text eol=lf
